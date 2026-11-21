@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>포켓몬 어드벤처 - 메타 리전</title>
+  <style>
+    /* 전체 레이아웃 - 픽셀아트 스타일 */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #111;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      font-family: 'DungGeunMo', monospace;
+      image-rendering: pixelated; /* 픽셀아트 보정 */
+    }
+
+    /* 한국어 픽셀 폰트 */
+    @font-face {
+      font-family: 'DungGeunMo';
+      src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/DungGeunMo.woff') format('woff');
+      font-weight: normal;
+      font-style: normal;
+    }
+
+    /* 게임 컨테이너 (DS 화면 비율) */
+    #game-container {
+      width: 512px;
+      height: 384px;
+      background: #000;
+      position: relative;
+      border: 4px solid #333;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    /* 전투 배경 */
+    #battle-screen {
+      width: 100%;
+      height: 100%;
+      display: none;
+      flex-direction: column;
+      position: relative;
+    }
+
+    /* 전투 필드 (상단 60%) */
+    .battle-field {
+      flex: 1;
+      position: relative;
+      background: linear-gradient(180deg, #87CEEB 0%, #87CEEB 40%, #7CB342 40%, #558B2F 100%);
+    }
+
+    /* 상대 포켓몬 영역 */
+    .enemy-pokemon-area {
+      position: absolute;
+      top: 20px;
+      right: 40px;
+    }
+    .enemy-pokemon-area img {
+      width: 128px;
+      height: 128px;
+      image-rendering: pixelated;
+    }
+
+    /* 내 포켓몬 영역 */
+    .player-pokemon-area {
+      position: absolute;
+      bottom: 10px;
+      left: 30px;
+    }
+    .player-pokemon-area img {
+      width: 160px;
+      height: 160px;
+      image-rendering: pixelated;
+    }
+
+    /* HP 바 (상대) */
+    .enemy-info {
+      position: absolute;
+      top: 15px;
+      left: 15px;
+      background: #f8f0d0;
+      border: 3px solid #484848;
+      border-radius: 4px;
+      padding: 6px 10px;
+      min-width: 200px;
+    }
+
+    /* HP 바 (플레이어) */
+    .player-info {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      background: #f8f0d0;
+      border: 3px solid #484848;
+      border-radius: 4px;
+      padding: 6px 10px;
+      min-width: 220px;
+    }
+
+    .pokemon-name-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 14px;
+      font-weight: bold;
+      color: #303030;
+      margin-bottom: 2px;
+    }
+    .pokemon-level {
+      font-size: 12px;
+      color: #606060;
+    }
+
+    /* HP 바 */
+    .hp-bar-container {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .hp-label { font-size: 11px; color: #f8a800; font-weight: bold; }
+    .hp-bar-bg {
+      flex: 1;
+      height: 6px;
+      background: #484848;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .hp-bar-fill {
+      height: 100%;
+      background: #48d848;
+      transition: width 0.5s ease;
+      border-radius: 3px;
+    }
+    .hp-bar-fill.yellow { background: #f8d030; }
+    .hp-bar-fill.red { background: #f85858; }
+
+    .hp-text {
+      font-size: 12px;
+      text-align: right;
+      color: #303030;
+      margin-top: 2px;
+    }
+
+    /* 경험치 바 */
+    .exp-bar-bg {
+      width: 100%;
+      height: 4px;
+      background: #303060;
+      border-radius: 2px;
+      margin-top: 3px;
+    }
+    .exp-bar-fill {
+      height: 100%;
+      background: #48a0f8;
+      border-radius: 2px;
+      transition: width 0.3s ease;
+    }
+
+    /* 하단 UI (40%) */
+    .battle-ui {
+      height: 148px;
+      background: #f8f0d0;
+      border-top: 4px solid #484848;
+      display: flex;
+    }
+
+    /* 메시지 영역 */
+    .message-box {
+      flex: 1;
+      padding: 12px 16px;
+      font-size: 16px;
+      color: #303030;
+      line-height: 1.6;
+      display: flex;
+      align-items: flex-start;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .message-box .msg-line {
+      min-height: 24px;
+    }
+
+    /* 행동 선택 버튼 */
+    .action-menu {
+      display: none;
+      width: 200px;
+      padding: 8px;
+      flex-direction: column;
+      gap: 4px;
+      border-left: 3px solid #484848;
+    }
+    .action-menu.visible { display: flex; }
+
+    .action-btn {
+      flex: 1;
+      background: #f0e8c8;
+      border: 2px solid #a89860;
+      border-radius: 4px;
+      font-family: 'DungGeunMo', monospace;
+      font-size: 15px;
+      color: #303030;
+      cursor: pointer;
+      text-align: center;
+      padding: 4px;
+      transition: background 0.1s;
+    }
+    .action-btn:hover { background: #e8d8a0; }
+    .action-btn:active { background: #d0c088; }
+    .action-btn.selected { background: #d0c088; border-color: #806830; }
+
+    /* 기술 선택 메뉴 */
+    .move-menu {
+      display: none;
+      width: 100%;
+      padding: 8px;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    .move-menu.visible { display: flex; }
+
+    .move-btn {
+      width: calc(50% - 4px);
+      background: #f0e8c8;
+      border: 2px solid #a89860;
+      border-radius: 4px;
+      font-family: 'DungGeunMo', monospace;
+      font-size: 14px;
+      color: #303030;
+      cursor: pointer;
+      padding: 6px 8px;
+      text-align: left;
+    }
+    .move-btn:hover { background: #e8d8a0; }
+    .move-btn .move-pp { font-size: 11px; color: #808080; float: right; }
+    .move-btn .move-type {
+      display: inline-block;
+      font-size: 10px;
+      padding: 1px 4px;
+      border-radius: 2px;
+      color: #fff;
+      margin-right: 4px;
+    }
+
+    /* 타입 색상 */
+    .type-normal { background: #A8A77A; } .type-fire { background: #EE8130; }
+    .type-water { background: #6390F0; } .type-electric { background: #F7D02C; color: #333; }
+    .type-grass { background: #7AC74C; } .type-ice { background: #96D9D6; color: #333; }
+    .type-fighting { background: #C22E28; } .type-poison { background: #A33EA1; }
+    .type-ground { background: #E2BF65; color: #333; } .type-flying { background: #A98FF3; }
+    .type-psychic { background: #F95587; } .type-bug { background: #A6B91A; }
+    .type-rock { background: #B6A136; } .type-ghost { background: #735797; }
+    .type-dragon { background: #6F35FC; } .type-dark { background: #705746; }
+    .type-steel { background: #B7B7CE; color: #333; } .type-fairy { background: #D685AD; }
+
+    /* 시작 화면 */
+    #start-screen {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background: linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      color: #fff;
+      cursor: pointer;
+    }
+    #start-screen h1 {
+      font-size: 28px;
+      color: #f8d030;
+      text-shadow: 2px 2px 0 #a07020, 4px 4px 0 #503010;
+      margin-bottom: 8px;
+    }
+    #start-screen h2 {
+      font-size: 16px;
+      color: #90b0d0;
+      margin-bottom: 40px;
+    }
+    #start-screen .start-hint {
+      font-size: 14px;
+      color: #a0a0c0;
+      animation: blink 1.2s infinite;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    /* 데미지 애니메이션 */
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20% { transform: translateX(-8px); }
+      40% { transform: translateX(8px); }
+      60% { transform: translateX(-4px); }
+      80% { transform: translateX(4px); }
+    }
+    .shake { animation: shake 0.3s ease; }
+
+    @keyframes flash {
+      0%, 100% { opacity: 1; }
+      25%, 75% { opacity: 0.2; }
+    }
+    .flash { animation: flash 0.4s ease 2; }
+
+    /* 쓰러짐 애니메이션 */
+    @keyframes faint {
+      0% { transform: translateY(0); opacity: 1; }
+      100% { transform: translateY(40px); opacity: 0; }
+    }
+    .faint { animation: faint 0.6s ease forwards; }
+
+    /* 상태이상 아이콘 */
+    .status-badge {
+      display: inline-block;
+      font-size: 10px;
+      padding: 1px 4px;
+      border-radius: 2px;
+      color: #fff;
+      font-weight: bold;
+      margin-left: 4px;
+    }
+    .status-psn { background: #A040A0; }
+    .status-brn { background: #F08030; }
+    .status-par { background: #F8D030; color: #333; }
+    .status-slp { background: #98D8D8; color: #333; }
+    .status-frz { background: #98D8D8; }
+
+    /* 파티클 이펙트 캔버스 */
+    #effect-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 236px;
+      pointer-events: none;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <!-- 시작 화면 -->
+    <div id="start-screen" onclick="startBattle()">
+      <h1>포켓몬 어드벤처</h1>
+      <h2>META REGION</h2>
+      <div class="start-hint">아무 곳이나 클릭하여 시작</div>
+    </div>
+
+    <!-- 전투 화면 -->
+    <div id="battle-screen">
+      <!-- 전투 필드 -->
+      <div class="battle-field">
+        <canvas id="effect-canvas"></canvas>
+
+        <!-- 상대 포켓몬 -->
+        <div class="enemy-info" id="enemy-info">
+          <div class="pokemon-name-row">
+            <span id="enemy-name">???</span>
+            <span class="pokemon-level" id="enemy-level">Lv.5</span>
+          </div>
+          <div class="hp-bar-container">
+            <span class="hp-label">HP</span>
+            <div class="hp-bar-bg"><div class="hp-bar-fill" id="enemy-hp-bar"></div></div>
+          </div>
+        </div>
+        <div class="enemy-pokemon-area" id="enemy-sprite-area">
+          <img id="enemy-sprite" src="" alt="">
+        </div>
+
+        <!-- 내 포켓몬 -->
+        <div class="player-info" id="player-info">
+          <div class="pokemon-name-row">
+            <span id="player-name">???</span>
+            <span class="pokemon-level" id="player-level">Lv.5</span>
+          </div>
+          <div class="hp-bar-container">
+            <span class="hp-label">HP</span>
+            <div class="hp-bar-bg"><div class="hp-bar-fill" id="player-hp-bar"></div></div>
+          </div>
+          <div class="hp-text" id="player-hp-text">0/0</div>
+          <div class="exp-bar-bg"><div class="exp-bar-fill" id="player-exp-bar" style="width: 0%"></div></div>
+        </div>
+        <div class="player-pokemon-area" id="player-sprite-area">
+          <img id="player-sprite" src="" alt="">
+        </div>
+      </div>
+
+      <!-- 하단 UI -->
+      <div class="battle-ui">
+        <div class="message-box" id="message-box">
+          <div class="msg-line" id="msg-line1"></div>
+          <div class="msg-line" id="msg-line2"></div>
+        </div>
+
+        <!-- 행동 선택 -->
+        <div class="action-menu" id="action-menu">
+          <button class="action-btn" onclick="selectAction('fight')">싸운다</button>
+          <button class="action-btn" onclick="selectAction('bag')">가방</button>
+          <button class="action-btn" onclick="selectAction('pokemon')">포켓몬</button>
+          <button class="action-btn" onclick="selectAction('run')">도망친다</button>
+        </div>
+
+        <!-- 기술 선택 -->
+        <div class="move-menu" id="move-menu"></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    /**
+     * 게임 메인 스크립트 (프로토타입)
+     * 2D 픽셀 스타일 전투 테스트
+     */
+    import { Pokemon, StatusCondition } from './src/pokemon/pokemon.js';
+    import { Battle, BattleState, ActionType, BattleType } from './src/battle/battle.js';
+    import { SamplePokemon, SampleMoves } from './src/data/sample-pokemon.js';
+    import { TypeName } from './src/data/types.js';
+
+    // 스프라이트 경로 (PokeAPI 에셋)
+    const SPRITE_BASE = '../sprites/sprites/pokemon';
+
+    // 타입 이름 → CSS 클래스 매핑
+    const typeClasses = [
+      'normal','fire','water','electric','grass','ice','fighting','poison',
+      'ground','flying','psychic','bug','rock','ghost','dragon','dark','steel','fairy'
+    ];
+
+    let battle = null;
+    let messageQueue = [];
+    let isShowingMessage = false;
+
+    // 포켓몬 생성 헬퍼 (샘플 데이터 사용)
+    function createPokemon(speciesId, level, options = {}) {
+      const species = SamplePokemon[speciesId];
+      if (!species) return null;
+
+      // 레벨에 맞는 기술 자동 배치
+      const availableMoves = species.learnset
+        .filter(m => m.level <= level && SampleMoves[m.moveId])
+        .slice(-4) // 최근 4개 기술
+        .map(m => ({ ...SampleMoves[m.moveId], currentPP: SampleMoves[m.moveId].pp }));
+
+      return new Pokemon(species, level, {
+        moves: availableMoves,
+        ...options
+      });
+    }
+
+    // 전투 시작
+    window.startBattle = function() {
+      document.getElementById('start-screen').style.display = 'none';
+      document.getElementById('battle-screen').style.display = 'flex';
+
+      // 테스트: 피카츄 vs 리자몽
+      const playerPikachu = createPokemon(25, 50, {
+        nickname: '피카츄',
+        ivs: { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 }, // 6V
+        natureId: 10, // 조심 (스피드↑ 공격↓)
+        evs: { hp: 0, atk: 0, def: 0, spa: 252, spd: 4, spe: 252 }
+      });
+
+      const enemyCharizard = createPokemon(6, 50, {
+        nickname: '리자몽',
+        ivs: { hp: 25, atk: 20, def: 18, spa: 28, spd: 22, spe: 24 }
+      });
+
+      // 추가 파티 멤버
+      const playerBulbasaur = createPokemon(1, 45, { nickname: '이상해씨' });
+      const playerSquirtle = createPokemon(7, 48, { nickname: '꼬부기' });
+
+      const playerTeam = [playerPikachu, playerBulbasaur, playerSquirtle].filter(Boolean);
+      const enemyTeam = [enemyCharizard].filter(Boolean);
+
+      battle = new Battle(playerTeam, enemyTeam, BattleType.WILD, {
+        onLog: (msg) => queueMessage(msg),
+        onStateChange: (state) => handleStateChange(state)
+      });
+
+      updateSprites();
+      updateUI();
+      battle.start();
+    };
+
+    // 스프라이트 업데이트
+    function updateSprites() {
+      if (!battle) return;
+      const pId = battle.playerActive.speciesId;
+      const eId = battle.enemyActive.speciesId;
+
+      // 후면(내 포켓몬) & 정면(상대 포켓몬) 스프라이트
+      document.getElementById('player-sprite').src = `${SPRITE_BASE}/back/${pId}.png`;
+      document.getElementById('enemy-sprite').src = `${SPRITE_BASE}/${eId}.png`;
+    }
+
+    // UI 업데이트
+    function updateUI() {
+      if (!battle) return;
+      const p = battle.playerActive;
+      const e = battle.enemyActive;
+
+      // 이름 & 레벨
+      document.getElementById('player-name').textContent = p.name;
+      document.getElementById('player-level').textContent = `Lv.${p.level}`;
+      document.getElementById('enemy-name').textContent = e.name;
+      document.getElementById('enemy-level').textContent = `Lv.${e.level}`;
+
+      // HP 바
+      updateHpBar('player', p);
+      updateHpBar('enemy', e);
+
+      // HP 텍스트 (플레이어만 표시)
+      document.getElementById('player-hp-text').textContent = `${p.currentHp}/${p.stats.hp}`;
+    }
+
+    function updateHpBar(side, pokemon) {
+      const percent = pokemon.getHpPercent();
+      const bar = document.getElementById(`${side}-hp-bar`);
+      bar.style.width = `${percent}%`;
+      bar.className = 'hp-bar-fill';
+      if (percent <= 20) bar.classList.add('red');
+      else if (percent <= 50) bar.classList.add('yellow');
+    }
+
+    // 메시지 큐 시스템
+    function queueMessage(msg) {
+      messageQueue.push(msg);
+      if (!isShowingMessage) showNextMessage();
+    }
+
+    function showNextMessage() {
+      if (messageQueue.length === 0) {
+        isShowingMessage = false;
+        // 메시지 끝 → 행동 선택 표시
+        if (battle && battle.state === BattleState.ACTION_SELECT) {
+          showActionMenu();
+        }
+        return;
+      }
+
+      isShowingMessage = true;
+      const msg = messageQueue.shift();
+      const line1 = document.getElementById('msg-line1');
+      const line2 = document.getElementById('msg-line2');
+
+      // 타이핑 효과
+      line2.textContent = line1.textContent;
+      line1.textContent = '';
+
+      let charIndex = 0;
+      const typeInterval = setInterval(() => {
+        if (charIndex < msg.length) {
+          line1.textContent += msg[charIndex];
+          charIndex++;
+        } else {
+          clearInterval(typeInterval);
+          updateUI();
+
+          // 데미지 애니메이션
+          if (msg.includes('데미지')) {
+            const isEnemyHit = !msg.startsWith(battle?.playerActive?.name);
+            const spriteArea = document.getElementById(isEnemyHit ? 'enemy-sprite-area' : 'player-sprite-area');
+            spriteArea.classList.add('shake');
+            setTimeout(() => spriteArea.classList.remove('shake'), 300);
+          }
+
+          // 쓰러짐 애니메이션
+          if (msg.includes('쓰러졌다')) {
+            const isEnemy = msg.includes(battle?.enemyActive?.name) || !msg.includes(battle?.playerActive?.name);
+            const sprite = document.getElementById(isEnemy ? 'enemy-sprite' : 'player-sprite');
+            sprite.classList.add('faint');
+            setTimeout(() => sprite.classList.remove('faint'), 600);
+          }
+
+          setTimeout(showNextMessage, 800);
+        }
+      }, 30);
+    }
+
+    // 행동 선택 메뉴 표시
+    function showActionMenu() {
+      document.getElementById('action-menu').classList.add('visible');
+      document.getElementById('move-menu').classList.remove('visible');
+    }
+
+    // 행동 선택 처리
+    window.selectAction = function(action) {
+      const actionMenu = document.getElementById('action-menu');
+      const moveMenu = document.getElementById('move-menu');
+
+      switch (action) {
+        case 'fight':
+          actionMenu.classList.remove('visible');
+          showMoveMenu();
+          break;
+        case 'run':
+          actionMenu.classList.remove('visible');
+          battle.selectAction({ type: ActionType.RUN });
+          break;
+        case 'pokemon':
+          // 파티 화면 (추후 구현)
+          alert('파티 화면은 추후 구현');
+          break;
+        case 'bag':
+          // 가방 화면 (추후 구현)
+          alert('가방은 추후 구현');
+          break;
+      }
+    };
+
+    // 기술 선택 메뉴
+    function showMoveMenu() {
+      const moveMenu = document.getElementById('move-menu');
+      moveMenu.innerHTML = '';
+      moveMenu.classList.add('visible');
+
+      const moves = battle.playerActive.moves;
+      moves.forEach((move, index) => {
+        const btn = document.createElement('button');
+        btn.className = 'move-btn';
+        const typeClass = typeClasses[move.type] || 'normal';
+        btn.innerHTML = `
+          <span class="move-type type-${typeClass}">${TypeName[move.type]}</span>
+          ${move.name}
+          <span class="move-pp">${move.currentPP}/${move.pp}</span>
+        `;
+        btn.onclick = () => {
+          moveMenu.classList.remove('visible');
+          battle.selectAction({
+            type: ActionType.FIGHT,
+            move: move
+          });
+        };
+        if (move.currentPP <= 0) {
+          btn.disabled = true;
+          btn.style.opacity = '0.5';
+        }
+        moveMenu.appendChild(btn);
+      });
+
+      // 뒤로가기 버튼
+      const backBtn = document.createElement('button');
+      backBtn.className = 'move-btn';
+      backBtn.textContent = '← 뒤로';
+      backBtn.onclick = () => {
+        moveMenu.classList.remove('visible');
+        showActionMenu();
+      };
+      moveMenu.appendChild(backBtn);
+    }
+
+    // 상태 변경 핸들러
+    function handleStateChange(state) {
+      if (state === BattleState.ACTION_SELECT) {
+        // 메시지 큐가 비어있으면 바로 메뉴 표시
+        if (!isShowingMessage && messageQueue.length === 0) {
+          showActionMenu();
+        }
+      }
+      if (state === BattleState.BATTLE_END) {
+        document.getElementById('action-menu').classList.remove('visible');
+        document.getElementById('move-menu').classList.remove('visible');
+        setTimeout(() => {
+          queueMessage('--- 전투 종료 ---');
+          queueMessage('클릭하여 다시 시작');
+          document.getElementById('battle-screen').onclick = () => {
+            document.getElementById('battle-screen').onclick = null;
+            document.getElementById('battle-screen').style.display = 'none';
+            document.getElementById('start-screen').style.display = 'flex';
+          };
+        }, 1000);
+      }
+    }
+  </script>
+</body>
+</html>
