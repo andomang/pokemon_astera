@@ -148,7 +148,7 @@ if (Server.enabled) {
     _bind();
     const $ = id => document.getElementById(id);
     // 회원가입은 사이트 가입 페이지에서 (이메일 인증 등 사이트 규칙을 그대로 따름)
-    replaceClick('p-tosignup', () => window.open('/metasearch/register', '_blank'));
+    replaceClick('p-tosignup', () => window.open('/signin?view=register&returnUrl=/pokemon', '_blank'));   // domang 통합 회원가입 (가입 후 게임으로)
     replaceClick('p-login', async () => {
       const err = await Account.loginAsync($('p-id').value.trim(), $('p-pw').value);
       if (err) { $('p-err').textContent = err; return; }
