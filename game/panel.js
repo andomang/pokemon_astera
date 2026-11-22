@@ -82,6 +82,8 @@ const Panel = {
   render() {
     if (!this.el) return;
     const h = [];
+    // 맨 위: domang.org 홈으로 나가는 링크 (모바일은 '설정' 버튼으로 이 패널을 열면 보임)
+    h.push('<a class="home" href="/">← domang.org 홈</a>');
     h.push('<h2>개인 설정</h2>');
     // 계정
     if (Account.user) {
