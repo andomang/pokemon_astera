@@ -530,7 +530,7 @@ class World {
 }
 
 World.prototype.drawWeather = function (ctx, cx, cy) {
-  const w = this.def.weather; if (!w) return;
+  const w = this.def.weather; if (!w || w === 'night') return;
   const t = Game.tick;
   const tile = (path, sx, sy, alpha) => {
     const im = img(path); if (!im) return;
@@ -545,7 +545,7 @@ World.prototype.drawWeather = function (ctx, cx, cy) {
   if (w === 'fog') tile('Graphics/Fogs/foggy.jpg', cx + t * 0.5, cy, 0.25);
   if (w === 'rift') { ctx.fillStyle = 'rgba(80,0,120,' + (0.15 + 0.05 * Math.sin(t / 30)) + ')'; ctx.fillRect(0, 0, SCREEN_W, SCREEN_H); tile('Graphics/Fogs/cloud.jpg', cx + t, cy + t * 0.3, 0.18); }
   if (w === 'ash') { ctx.fillStyle = 'rgba(90,40,20,0.15)'; ctx.fillRect(0, 0, SCREEN_W, SCREEN_H); tile('Graphics/Weather/fog_tile.png', cx + t, cy - t * 2, 0.3); }
-  if (w === 'night' || (this.def.outdoor && !isDay() && Player.options.dayNight !== false)) { ctx.fillStyle = 'rgba(20,20,70,0.28)'; ctx.fillRect(0, 0, SCREEN_W, SCREEN_H); }
+  // 낮·밤 색감과 불빛은 lighting.js 가 그림 (예전엔 밤에 파란 막 한 장)
 };
 
 // 트레이너 팀 생성: [종, 레벨, {item, gmaxF, tera, moves}]
