@@ -290,7 +290,13 @@ const Bag = {
   add(id, n = 1) { Player.bag[id] = (Player.bag[id] || 0) + n; },
   remove(id, n = 1) { if (!Player.bag[id]) return; Player.bag[id] -= n; if (Player.bag[id] <= 0) delete Player.bag[id]; },
   count(id) { return Player.bag[id] || 0; },
-  pocket(pk) { return Object.keys(Player.bag).filter(id => ITEMS[id] && pocketOf(id) === pk).sort((a, b) => Object.keys(ITEMS).indexOf(a) - Object.keys(ITEMS).indexOf(b)); }
+  // 정렬 순서는 도구 목록 순서. 예전엔 비교할 때마다 Object.keys(ITEMS)(1,700여 개)를 새로 만들고 indexOf로 찾아서,
+  //   가방 화면이 매 프레임 이걸 반복하며 커서를 움직일 때마다 렉이 걸렸음 → 순서표를 한 번만 만들어 둠
+  pocket(pk) {
+    if (!Bag._order) { Bag._order = {}; Object.keys(ITEMS).forEach((k, i) => { Bag._order[k] = i; }); }
+    const O = Bag._order;
+    return Object.keys(Player.bag).filter(id => ITEMS[id] && pocketOf(id) === pk).sort((a, b) => O[a] - O[b]);
+  },
 };
 const POCKETS = [[1, '도구'], [2, '회복'], [3, '몬스터볼'], [8, '중요한 물건']];
 function pocketOf(id) { const p = ITEMS[id].pk; return p === 2 || p === 3 || p === 8 ? p : 1; }
@@ -556,7 +562,8 @@ class BagScreen extends Win {
     if (opt.mode === 'battle' && BagScreen.lastPocket === undefined) this.pi = 1;
     this.ii = 0; this.top = 0; this.busy = false;
   }
-  get list() { return Bag.pocket(this.pockets[this.pi][0]); }
+  // 같은 프레임 안(update·draw)에서는 한 번만 계산 (가방 내용이 바뀌면 다음 프레임에 다시 계산)
+  get list() { if (this._lt !== Game.tick || this._lp !== this.pi) { this._lt = Game.tick; this._lp = this.pi; this._list = Bag.pocket(this.pockets[this.pi][0]); } return this._list; }
   update() {
     if (this.busy) return;
     const L = this.list;
@@ -566,7 +573,8 @@ class BagScreen extends Win {
     if (Input.rep('up')) { this.ii = (this.ii + n - 1) % n; SE.cursor(); }
     if (Input.rep('down')) { this.ii = (this.ii + 1) % n; SE.cursor(); }
     if (this.ii < this.top) this.top = this.ii;
-    if (this.ii >= this.top + 7) this.top = this.ii - 6;
+    // 목록 칸에는 6줄이 들어감 (예전엔 7줄이라 마지막 줄이 아래 설명 칸까지 내려가 그려졌음)
+    if (this.ii >= this.top + 6) this.top = this.ii - 5;
     if (Input.trig('B')) { SE.cancel(); BagScreen.lastPocket = this.pi; this.close(null); return; }
     if (Input.trig('A')) {
       if (this.ii >= L.length) { SE.cancel(); BagScreen.lastPocket = this.pi; this.close(null); return; }
@@ -616,7 +624,7 @@ class BagScreen extends Win {
     text(ctx, this.pockets[this.pi][1], 94, 182, { size: 22, align: 'center', color: '#404040', shadow: '#c0c0c0' });
     text(ctx, '◀', 6, 182, { size: 18, ...WHITE_TEXT }); text(ctx, '▶', 166, 182, { size: 18, ...WHITE_TEXT });
     const L = this.list;
-    for (let k = 0; k < 7; k++) {
+    for (let k = 0; k < 6; k++) {
       const i = this.top + k; if (i > L.length) break;
       const y = 16 + k * 46;
       if (i === this.ii) drawImg(ctx, 'Graphics/UI/Bag/cursor.png', 178, y - 22) || (ctx.fillStyle = 'rgba(255,120,80,0.35)', ctx.fillRect(186, y - 4, 270, 34));

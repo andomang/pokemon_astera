@@ -519,11 +519,22 @@ class World {
     // 지역 이름 표시
     if (this.nameShow > 0 && this.def.outdoor !== undefined) {
       const t = this.nameShow, y = t > 130 ? -50 + (150 - t) * 2.5 : (t < 20 ? -50 + t * 2.5 : 0);
-      drawImg(ctx, 'Graphics/Windowskins/sign hgss loc.png', 0, 0, 512, 64, 0, y) || drawWindow(ctx, 0, y, 240, 50, CHOICE_SKIN);
-      text(ctx, this.def.name, 20, y + 14, { size: 22 });
+      // 표지판 그림은 96×48 작은 판 → 이름 길이에 맞춰 양 끝(16px)은 그대로, 가운데만 늘려 그림
+      //   (예전엔 그림을 원래 크기로만 그려서 긴 지역 이름이 판 밖으로 삐져나갔음)
+      setFont(ctx, 22);
+      const nw = Math.min(SCREEN_W - 8, Math.ceil(ctx.measureText(this.def.name).width) + 44);
+      const sign = img('Graphics/Windowskins/sign hgss loc.png');
+      if (sign) {
+        const sx = 6, sw = 84, cap = 16, bw = Math.max(nw, sw);   // 그림 안 실제 판: x 6~89
+        ctx.drawImage(sign, sx, 0, cap, 48, 4, y + 4, cap, 48);
+        ctx.drawImage(sign, sx + cap, 0, sw - cap * 2, 48, 4 + cap, y + 4, bw - cap * 2, 48);
+        ctx.drawImage(sign, sx + sw - cap, 0, cap, 48, 4 + bw - cap, y + 4, cap, 48);
+      } else drawWindow(ctx, 4, y + 4, nw, 46, CHOICE_SKIN);
+      text(ctx, this.def.name, 26, y + 15, { size: 22 });
     } else if (this.nameShow > 0) {
       const t = this.nameShow, y = t > 130 ? -50 + (150 - t) * 2.5 : (t < 20 ? -50 + t * 2.5 : 0);
-      drawWindow(ctx, 4, y + 4, 220, 46, CHOICE_SKIN);
+      setFont(ctx, 22);   // 실내 이름 창도 이름 길이에 맞춤 (예전엔 220px 고정)
+      drawWindow(ctx, 4, y + 4, Math.min(SCREEN_W - 8, Math.max(220, Math.ceil(ctx.measureText(this.def.name).width) + 36)), 46, CHOICE_SKIN);
       text(ctx, this.def.name, 20, y + 15, { size: 22 });
     }
   }

@@ -157,6 +157,9 @@ function decorateTown(m, def, key) {
       if (!stillOk()) { before.forEach(([x, y, v]) => { m.set(x, y, 1, v); m.solid.delete(idx(x, y)); }); continue; }
       for (let dy = -1; dy <= h; dy++) for (let dx = -1; dx <= w; dx++) if (w * h > 1) reserved.add(idx(p.x + dx, p.y + dy));
       for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) reserved.add(idx(p.x + dx, p.y + dy));
+      // 어떤 소품인지 칸마다 기록 → freedom.js 에서 말을 걸면(A) 소품마다 다른 반응
+      m.decorAt = m.decorAt || {};
+      for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) m.decorAt[idx(p.x + dx, p.y + dy)] = { name, x: p.x, y: p.y };
       n++; placed++;
     }
   }
