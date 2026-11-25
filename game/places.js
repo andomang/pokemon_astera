@@ -309,6 +309,7 @@ function decorateRoom(m, def, key) {
         if (xSet.has(id)) continue;
         const x = p.x + dx, y = p.y + dy;
         m.extras.push({ x, y, id });
+        (m.decorAt = m.decorAt || {})[idx(x, y)] = { name, x: p.x, y: p.y };   // freedom.js 가 소품별 반응에 씀
         // 통과할 수 있는 칸(나무 위쪽처럼 우선순위가 있는 칸)이 아니면 막음
         const solid = !((O.prio[id] || 0) > 0 && !((O.pass[id] || 0) & 0x0f));
         if (solid) m.extraSolid.add(idx(x, y));

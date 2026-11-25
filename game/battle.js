@@ -403,10 +403,13 @@ class Battle {
     }
     const acts = { p: pAct, f: fAct };
     this.turnOrder = order;
+    // 이 턴에 행동을 고른 포켓몬 (먼저 맞고 쓰러져 다음 포켓몬이 나오면, 새로 나온 포켓몬이 앞 포켓몬의 기술을 쓰지 않게)
+    const chooser = { p: this.p, f: this.f };
     for (const side of order) {
       if (this.result) return;
       const me = this[side], other = this[side === 'p' ? 'f' : 'p'];
       if (!me || me.mon.fainted) continue;
+      if (me !== chooser[side] && acts[side].type !== 'switch') continue;
       const a = acts[side];
       if (a.type === 'run') { if (await this.tryRun()) return; continue; }
       if (a.type === 'switch') { await this.playerSwitch(a.idx); continue; }

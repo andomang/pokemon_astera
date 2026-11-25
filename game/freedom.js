@@ -246,3 +246,110 @@ World.prototype.draw = function (ctx) {
 // 낚싯대·꿀 가격 (원래 0원이라 살 수 없었음)
 const FX_PRICES = { OLDROD: 1000, GOODROD: 6000, SUPERROD: 15000, HONEY: 300 };
 for (const k in FX_PRICES) if (ITEMS[k] && !ITEMS[k].pr) ITEMS[k].pr = FX_PRICES[k];
+
+// ============================================================
+// 실내 가구 상호작용 — 템플릿(집·연구소·센터·상점)마다 가구가 있는 칸 [x1, y1, x2, y2, 종류]
+//   집 템플릿 house1·house2 는 모양이 같음 (우리 집·이웃집·각 마을 민가 공통)
+// ============================================================
+const INDOOR_OBJS = {
+  house: [[9, 2, 10, 2, 'tv'], [13, 2, 13, 3, 'fridge'], [14, 2, 14, 3, 'cupboard'], [15, 2, 15, 3, 'sink'], [3, 5, 3, 7, 'bookshelf'], [5, 5, 5, 6, 'bath'], [14, 8, 15, 9, 'bed']],
+  lab: [[0, 1, 3, 2, 'labpc'], [9, 1, 12, 1, 'research'], [0, 8, 4, 9, 'research'], [8, 8, 12, 9, 'research'], [1, 3, 2, 5, 'healer'], [6, 1, 7, 1, 'board'], [0, 11, 0, 11, 'plant'], [12, 11, 12, 11, 'plant']],
+  pc: [[1, 1, 1, 2, 'plant'], [2, 1, 3, 1, 'magazine'], [7, 0, 8, 0, 'tv'], [12, 1, 13, 1, 'poster'], [2, 6, 3, 7, 'sofa'], [11, 6, 12, 7, 'sofa']],
+  mart: [[1, 1, 1, 2, 'plant'], [7, 1, 9, 1, 'drinkcase'], [7, 4, 10, 6, 'goods']],
+};
+const TMPL_GROUP = { house1: 'house', house2: 'house', lab: 'lab', pc: 'pc', mart: 'mart' };
+const atHome = w => w.key === 'HOME';
+const INDOOR_ACT = {
+  // TV: 오늘의 뉴스 — 열린 시공 포탈·아직 못 만난 전설·생활 정보 (탐험 단서)
+  async tv(w) {
+    const news = [];
+    if (typeof PORTAL_ROUTES !== 'undefined' && Player.badges.length >= 3) {
+      const open = PORTAL_ROUTES.filter((k, i) => portalOpen(i)).map(k => MAPS[k].name);
+      if (open.length) news.push('[긴급 속보] 오늘 시공의 틈이 관측된 곳: ' + open.join(', ') + '. 이상한 포켓몬 목격담이 잇따르고 있습니다.');
+    }
+    if (typeof LEGENDS !== 'undefined') {
+      const l = LEGENDS.filter(x => !Player.caught[x.sp] && MAPS[x.map] && (!x.cond || x.cond()));
+      if (l.length) { const x = pick(l); news.push('[미스터리 특집] ' + MAPS[x.map].name + ' 근처에서 ' + (x.mythical ? '환상의' : '전설의') + ' 포켓몬을 봤다는 제보가 들어왔습니다!'); }
+    }
+    news.push(pick([isDay() ? '[날씨] 오늘 아스테라는 맑음. 나무 그늘 아래 벤치에서 쉬어 가세요.' : '[날씨] 밤이 깊었습니다. 반딧불이 많은 숲은 산책하기 좋아요.',
+      '[생활 정보] 도로의 반짝이는 곳에는 누군가 떨어뜨린 도구가 묻혀 있을지도 모릅니다.', '[낚시 소식] 좋은 낚싯대일수록 강한 물 포켓몬이 걸린다고 합니다.']));
+    await say(['TV가 켜져 있다...'].concat(news.slice(0, 2)));
+  },
+  async fridge(w, x, y) {
+    if (FX.usedToday(w, x, y, 'fridge')) { await say('냉장고다. 오늘 먹을 건 이미 꺼냈다.'); return; }
+    FX.mark(w, x, y, 'fridge');
+    await FX.give(pick(['FRESHWATER', 'SODAPOP', 'LEMONADE', 'MOOMOOMILK']), 1, atHome(w) ? '엄마가 넣어 둔 음료가 있다. "모험 중에 마시렴" 이라는 쪽지가 붙어 있다!' : '"마음껏 드세요" 라는 쪽지와 함께 음료가 있다.');
+  },
+  async cupboard(w, x, y) {
+    const lucky = !FX.usedToday(w, x, y, 'cup') && chance(0.5);
+    FX.mark(w, x, y, 'cup');
+    if (!lucky) { await say(pick(['찬장에 그릇이 가지런히 놓여 있다.', '향신료 병이 줄지어 있다.', '맛있는 냄새가 남아 있다.'])); return; }
+    await FX.give(pick(['ORANBERRY', 'PECHABERRY', 'POTION', 'HONEY']), 1, '찬장 구석에서 무언가 찾았다!');
+  },
+  async sink(w) {
+    if (atHome(w)) { Player.party.forEach(m => m.heal()); Audio2.playME('Pkmn healing'); await say(['시원한 물로 얼굴을 씻었다.', '포켓몬들에게도 물을 먹였다. 모두 기운을 되찾았다!']); }
+    else await say('깨끗한 개수대다. 물이 반짝인다.');
+  },
+  // 책장: 아스테라 이야기 + 쓸모 있는 팁, 집마다 한 번 책 사이에서 기술머신이 나올 수 있음
+  async bookshelf(w) {
+    const books = [
+      typeof LORE !== 'undefined' && LORE.length ? [].concat(pick(LORE))[0] : '아스테라는 200년 전 바다 밑으로 가라앉았던 대륙이라고 한다.',
+      '「포켓몬 상성 입문」 물은 불에, 불은 풀에, 풀은 물에 강하다. 날씨가 맞으면 기술의 위력도 달라진다.',
+      '「진화의 비밀」 어떤 포켓몬은 돌을, 어떤 포켓몬은 친밀도를, 어떤 포켓몬은 특별한 장소를 필요로 한다.',
+      '「전설 연구 노트」 유전자쐐기, 녹슨 검… 전설을 잡으면 마그마시티의 폼 연구원을 찾아가라.',
+      '「낚시꾼의 일기」 찌가 움직이는 그 순간! 너무 일찍 당기면 물고기는 도망간다.',
+    ];
+    await say(['책장에 책이 빼곡하다. 한 권을 펼쳐 보았다...', pick(books)]);
+    if (!Flags.has('book_tm_' + w.key) && chance(0.25) && typeof TM_LIST !== 'undefined' && TM_LIST.length) {
+      Flags.set('book_tm_' + w.key);
+      await FX.give(pick(TM_LIST), 1, '책 사이에 기술머신이 끼워져 있었다!');
+    }
+  },
+  async bath(w, x, y) {
+    const lucky = !FX.usedToday(w, x, y, 'bath') && chance(0.3);
+    FX.mark(w, x, y, 'bath');
+    if (lucky) { await FX.give(pick(['HEARTSCALE', 'PEARL', 'SHOALSALT']), 1, '욕조 바닥에서 반짝이는 것을 주웠다!'); return; }
+    await say(pick(['따뜻한 물이 받아져 있다. 물 포켓몬이 좋아할 것 같다.', '고무 오리 장난감이 둥둥 떠 있다.']));
+  },
+  // 침대: 우리 집에서는 푹 자고 완전 회복
+  async bed(w) {
+    if (!atHome(w)) { await say('남의 침대다. 함부로 누우면 안 될 것 같다.'); return; }
+    if (!(await yesNo('침대에서 푹 쉴까요?'))) return;
+    await Game.fade(1, 20);
+    Player.party.forEach(m => m.heal()); Audio2.playME('Pkmn healing');
+    await Game.fade(0, 20);
+    await say(['푹 자고 일어났다! 포켓몬들도 모두 기운이 넘친다.', pick(['꿈에서 빛나는 소용돌이를 봤다...', '꿈속에서 누군가 "아스테라의 중심으로 와라" 하고 속삭였다.', '창밖에서 포켓몬 울음소리가 들린다. 오늘도 모험 날씨다!'])]);
+  },
+  // 연구소 컴퓨터: 포켓몬 맡기기·찾기 (센터 PC 와 같은 기능)
+  async labpc(w) { await say('연구소 컴퓨터를 켰다. 박스 시스템에 접속한다...'); if (SCRIPTS.pcBox) await SCRIPTS.pcBox(w); },
+  async research() {
+    const seen = Object.keys(Player.seen || {}).length, caught = Object.keys(Player.caught || {}).length;
+    await say(['연구 자료가 빼곡하다.', pick(['「아스테라 생태 보고서」 지금까지 ' + seen + '종을 발견하고 ' + caught + '종을 잡았다고 기록되어 있다.', '「패러독스 가설」 쾌청할 때 강해지는 고대의 포켓몬, 전기가 흐를 때 강해지는 미래의 포켓몬.', '「레이드 관측」 붉게 빛나는 둥지에서는 다이맥스한 포켓몬이 기다린다.'])]);
+  },
+  async healer() { Player.party.forEach(m => m.heal()); Audio2.playME('Pkmn healing'); await say('연구용 회복 장치를 빌려 썼다. 포켓몬들이 모두 회복되었다!'); },
+  async board() { await say(['게시판에 연구 메모가 붙어 있다.', pick(['"오늘의 과제: 도로의 나무를 흔들어 서식 포켓몬 조사하기"', '"바위 밑 화석 채집 — 격투 타입 포켓몬과 함께 갈 것"', '"강가에서 낚시로 물 포켓몬 표본 확보"'])]); },
+  async plant() { await say(pick(['잎이 반질반질한 화분이다. 누군가 정성껏 키우는 것 같다.', '화분에서 은은한 풀 냄새가 난다.'])); },
+  async magazine() { await say(['잡지가 꽂혀 있다.', pick(['「월간 트레이너」 이번 달 특집: 분수에 동전을 던지면 행운이?', '「여행 아스테라」 숨은 명소 — 우편함 편지가 매일 바뀌는 마을들', '「배틀 비법」 교체 타이밍이 승부를 가른다!'])]); },
+  async poster() { await say('포스터: "포켓몬센터는 24시간 무료로 회복해 드립니다!"'); },
+  async sofa() { await say(pick(['푹신한 소파다. 잠깐 앉아 쉬었다.', '소파 옆 탁자에 누가 두고 간 지도가 있다. 도로마다 반짝이는 표시가 그려져 있다...'])); },
+  async drinkcase() { await say('음료 진열대다. 시원한 음료가 가득하다. (계산대에서 살 수 있다)'); },
+  async goods() { await say(pick(['상품이 가지런히 진열되어 있다.', '새로 들어온 볼이 반짝이고 있다.', '"오늘의 추천: 좋은 낚싯대는 마을 노점에서!" 라는 쪽지가 붙어 있다.'])); },
+};
+
+// 실내에서 A: 사람·표지판이 없으면 가구 → 방 장식 소품 순서로 찾음
+const _fxInteractIn = World.prototype.interact;
+World.prototype.interact = function () {
+  if (this.def.outdoor) return _fxInteractIn.call(this);
+  const p = this.player, [dx, dy] = DIRS[p.dir], fx = p.x + dx, fy = p.y + dy;
+  const f = this.follower;
+  const busy = this.charAt(fx, fy) || (!this.map.passable(fx, fy, OPP[p.dir]) && this.charAt(fx + dx, fy + dy)) ||
+    (f && f.x === fx && f.y === fy && !f.hiddenUntilMove) || (this.def.signs || []).some(s => s.x === fx && s.y === fy);
+  if (busy) return _fxInteractIn.call(this);
+  const w = this, idef = typeof INTERIOR_DEFS !== 'undefined' && INTERIOR_DEFS[this.key];
+  const objs = INDOOR_OBJS[TMPL_GROUP[idef && idef.tmpl]] || [];
+  const o = objs.find(([x1, y1, x2, y2]) => fx >= x1 && fx <= x2 && fy >= y1 && fy <= y2);
+  if (o) { this.runScript(() => INDOOR_ACT[o[4]](w, o[0], o[1])); return; }
+  const dec = this.map.decorAt && this.map.decorAt[fx + fy * this.map.w];
+  if (dec && DECOR_MAP[dec.name]) { const a = DECOR_MAP[dec.name]; this.runScript(() => (DECOR_ACT[a] || FX_ACT[a]).call(null, w, dec.x, dec.y)); return; }
+  return _fxInteractIn.call(this);
+};
